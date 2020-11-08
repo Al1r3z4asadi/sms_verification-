@@ -22,18 +22,20 @@ def process():
     # import pdb;pdb.set_trace()
     form = request.form
     sender = form['from']
-    message = form['message']
+    message = normalize_string(form['message'])
     send_sms(sender , message)
     return form
 
 
 
-def normalize_string(str):
-    
+def normalize_string(string):
 
-
-
-
+    from_char = '۱۲۳۴۵۶۷۸۹۰'
+    to_char = '1234567890'
+    for i in rangeg(len(from_char)):
+        string = string.replace(from_char[i] , to_char[i])
+    string = string.upper()
+    return string
 
 
 
@@ -68,6 +70,8 @@ def import_database_from_excel(filepath):
     serials_counter = 0
 
     for index , (line , ref , desc , start_serial , end_serial , date ) in df.iterrows():
+        start_serial = normalize_string(start_serial)
+        end_serial = normalize_string(end_serial)
         query = f'Insert into valid_serials values ("{line}" , "{ref}" , "{desc}" ,"{start_serial}" ,"{end_serial}" , "{date}" )'
         cur.execute(query)
         if serials_counter & 7 == 0 :# commits each 8 query
