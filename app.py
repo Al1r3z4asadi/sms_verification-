@@ -17,22 +17,12 @@ def send_sms(receptor , message):
     res = requests.post(url , data=data)
 
 
-@app.route('/v1/process',methods=['POST'])
-def process():
-    # import pdb;pdb.set_trace()
-    form = request.form
-    sender = form['from']
-    message = normalize_string(form['message'])
-    send_sms(sender , message)
-    return form
-
-
 
 def normalize_string(string):
 
     from_char = '۱۲۳۴۵۶۷۸۹۰'
     to_char = '1234567890'
-    for i in rangeg(len(from_char)):
+    for i in range(len(from_char)):
         string = string.replace(from_char[i] , to_char[i])
     string = string.upper()
     return string
@@ -101,10 +91,38 @@ def import_database_from_excel(filepath):
     #returning how many valid and invalid serials added to the database 
     return (serials_counter, invalid_counter)
 
-def check_serial():
-    pass 
+def check_serial(serial):
+    """ will check if serial number is good or not"""
+    conn = sqlite3.connect('serials.db')
+    cur = conn.cursor()
+
+    query = f"Select * From invalid_serials where invalid = '{serial}'"
+    result = cur.execute(query)
+    if len(result.fetchall()) == 1:
+        return "This serial is among failed ones"
+
+
+    query = f"Select * From valid_serials where start_serial < '{serial}' and end_serial > '{serial}'" 
+    result = cur.execute(query)
+    if len(result.fetchall()) == 1 :
+        return "found your serial"
+
+    return "it is not in the db"
+
+
+@app.route('/v1/process',methods=['POST'])
+def process():
+    # import pdb;pdb.set_trace()
+    form = request.form
+    sender = form['from']
+    message = normalize_string(form['message'])
+
+    answer = check_serial(message)
+    send_sms(sender , answer)
+    return form
 
 
 if __name__ == "__main__":
-    # app.run('0.0.0.0' , 5000 , debug = True)
-     import_database_from_excel('data.xlsx')
+    import_database_from_excel('data.xlsx')
+    print(check_serial("JJ104"))
+    app.run('0.0.0.0' , 5000 , debug = True)
