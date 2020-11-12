@@ -234,7 +234,8 @@ def check_serial(serial):
     return "it is not in the db"
 
 
-@app.route('/v1/process',methods=['POST'])
+@app.route('/v1/process',methods=['POST'])#TODO adding a callbacktoken to increase the safty
+#which would be like /v1/{CALL_BACK_TOKEN}/proces 
 def process():
     # import pdb;pdb.set_trace()
     form = request.form
