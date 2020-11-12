@@ -5,10 +5,17 @@ import requests
 from pandas import read_excel
 import sqlite3 , config
 from werkzeug.utils import secure_filename
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 
 app = Flask(__name__)
 
+limiter = Limiter(
+    app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"]
+)
 # config
 app.config.update(
     SECRET_KEY = config.FLASK_SECRET_KEY
@@ -81,6 +88,7 @@ def home():
 
 # somewhere to login
 @app.route("/login", methods=["GET", "POST"])
+@limiter.limit("4/minute")
 def login():
     if request.method == 'POST': # TODO Stoping bruteforce  
         username = request.form['username']
@@ -237,6 +245,11 @@ def process():
     send_sms(sender , answer)
     return form
 
+@app.route('/v1/ok')
+def check_server():
+    return {
+        "message" :"ok"
+    }
 
 if __name__ == "__main__":
     app.run('0.0.0.0' , 5000 , debug = True)
