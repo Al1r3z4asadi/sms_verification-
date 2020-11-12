@@ -218,7 +218,7 @@ def check_serial(serial):
         return "This serial is among failed ones"
 
 
-    query = f"Select * From valid_serials where start_serial < '{serial}' and end_serial > '{serial}'" 
+    query = f"Select * From valid_serials where start_serial <= '{serial}' and end_serial => '{serial}'" 
     result = cur.execute(query)
     if len(result.fetchall()) == 1 :
         return "found your serial"
