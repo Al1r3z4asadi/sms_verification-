@@ -1,9 +1,9 @@
 import os
 from flask import Flask , jsonify , flash , request ,Response, redirect, url_for, session, abort
-from flask_login import LoginManager , UserMixin, login_required, login_user, logout_user 
+from flask_login import LoginManager , UserMixin, login_required, login_user, logout_user , current_user 
 import requests
 from pandas import read_excel
-import sqlite3 , config
+import  config
 from werkzeug.utils import secure_filename
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -90,6 +90,10 @@ def home():
 @app.route("/login", methods=["GET", "POST"])
 @limiter.limit("4/minute")
 def login():
+
+    if current_user.is_authenticated:
+        return redirect('/')
+
     if request.method == 'POST': # TODO Stoping bruteforce  
         username = request.form['username']
         password = request.form['password']        
