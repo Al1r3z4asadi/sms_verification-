@@ -19,6 +19,7 @@ lazy-object-proxy==1.4.3
 limits==1.5.1
 MarkupSafe==1.1.1
 mccabe==0.6.1
+mysql-connector==2.2.9
 numpy==1.19.4
 pandas==1.1.4
 parso==0.7.1

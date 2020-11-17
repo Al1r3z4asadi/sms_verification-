@@ -3,10 +3,13 @@ from flask import Flask , jsonify , flash , request ,Response, redirect, url_for
 from flask_login import LoginManager , UserMixin, login_required, login_user, logout_user , current_user 
 import requests
 from pandas import read_excel
-import  config
+import config
 from werkzeug.utils import secure_filename
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+import mysql.connector  as mc 
+from mysql.connector import errorcode
+
 
 
 app = Flask(__name__)
@@ -159,6 +162,15 @@ def normalize_string(string):
 
 
 
+def create_database(cursor):
+    try:
+        cursor.execute('drop database if exists  {};'.format(config.DB_NAME))
+        cursor.execute(
+            "CREATE DATABASE {} DEFAULT CHARACTER SET 'utf8';".format(config.DB_NAME))
+    except mc.Error as err:
+        print("Failed creating database: {}".format(err))
+        exit(1)
+
 
 
 def import_database_from_excel(filepath):
@@ -167,42 +179,83 @@ def import_database_from_excel(filepath):
     '''frist sheet contains serial data and the second sheet contains invalid serial numbers which contains one column
         this data will be written in the sql database 
     '''
+    
+    conn = mc.connect(**config.MYSQLCONFIG)
+    cur = conn.cursor(buffered=True)
+    TABLES = {}
+
+    try:
+        cur.execute("USE {}".format(config.DB_NAME))
+        cur.execute('drop table if exists valid_serials;')
+        cur.execute('drop table if exists invalid_serials;')
+        # print("why the fawk if exists not working in mysql ")
+
+    except mc.Error as err:
+        if err.errno == errorcode.ER_BAD_DB_ERROR:
+            create_database(cur)
+            conn.database = config.DB_NAME
+        else:
+            exit(1)
 
 
 
-    conn = sqlite3.connect('serials.db')
-    cur = conn.cursor()
+    create_valids = '''Create Table valid_serials(
+            id int(11) NOT NULL AUTO_INCREMENT , 
+            ref   varchar(128) NOT NULL ,
+            description varchar(64), 
+            start_serial varchar(128) NOT NULL , 
+            end_serial varchar(128) ,
+            date datetime NOT NULL,
+            PRIMARY KEY (id)
+    ) ENGINE=InnoDB '''
 
-    #remove the serials table if exists then create  a new one
-    cur.execute('Drop table if exists valid_serials')
-    cur.execute(""" create table if not exists valid_serials (
-        id Integer primary key,
-        ref text , 
-        desc text , 
-        start_serial integer , 
-        end_serial text , 
-        date DATE
-    );""")
+
+    create_invalids = """create table invalid_serials (
+        invalid varchar(128) primary key
+    );"""
+
+    TABLES['invalid_serials'] = create_invalids
+    TABLES['valid_serials'] = create_valids
+
+
+
+    for table_name in TABLES:
+        table_description = TABLES[table_name]
+        try:
+            cur.execute(table_description)
+        except mc.Error as err:
+            if err.errno == errorcode.ER_TABLE_EXISTS_ERROR:
+                # print("already exists.")
+                print("FAWK , an error in creating tables")
+            else:
+                # print(err.msg)
+                pass
+        else:
+            print("We are all set . tables created")
 
     df = read_excel(filepath , 0)
     serials_counter = 0
 
+
+
+
+    add_valids = ("INSERT INTO valid_serials "
+               "(Height , Weight , Name) "
+               "VALUES (%s, %s, %s)")
+
+
+
+
     for index , (line , ref , desc , start_serial , end_serial , date ) in df.iterrows():
         start_serial = normalize_string(start_serial)
         end_serial = normalize_string(end_serial)
+        # import pdb;pdb.set_trace()
         query = f'Insert into valid_serials values ("{line}" , "{ref}" , "{desc}" ,"{start_serial}" ,"{end_serial}" , "{date}" )'
         cur.execute(query)
         if serials_counter & 7 == 0 :# commits each 8 query
             conn.commit()
         serials_counter+=1
     conn.commit()
-
-
-
-    cur.execute('Drop table if exists invalid_serials')
-    cur.execute(""" create table if not exists invalid_serials (
-        invalid Text primary key
-    );""")
 
     df = read_excel(filepath , 1)
     invalid_counter = 0 
@@ -221,21 +274,28 @@ def import_database_from_excel(filepath):
 
 def check_serial(serial):
     """ will check if serial number is good or not"""
-    conn = sqlite3.connect('serials.db')
+    print("we are in cheeck serials")
+    conn = mc.connect(**config.MYSQLCONFIG)
     cur = conn.cursor()
-
+    print("what is going on idiots")
+    cur.execute("USE {}".format(config.DB_NAME))
     query = f"Select * From invalid_serials where invalid = '{serial}'"
     result = cur.execute(query)
-    if len(result.fetchall()) == 1:
+    print("result in checkserial is " , result)
+    if result == None:
+        return "it is not in the db"
+    
+    if result > 0:
         return "This serial is among failed ones"
 
-
+    print("serial sended to checkserial is " , serial)
     query = f"Select * From valid_serials where start_serial <= '{serial}' and end_serial => '{serial}'" 
     result = cur.execute(query)
-    if len(result.fetchall()) == 1 :
+    print("resulst in the valids" , result)
+    if result == 1 :
         return "found your serial"
 
-    return "it is not in the db"
+   
 
 
 @app.route('/v1/process',methods=['POST'])#TODO adding a callbacktoken to increase the safty
@@ -245,7 +305,7 @@ def process():
     form = request.form
     sender = form['from']
     message = normalize_string(form['message'])
-
+    print("we got your massage and sending an answer for you" , message)
     answer = check_serial(message)
     send_sms(sender , answer)
     return form
